@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG 转字体工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#8B5CF6',
+                        neutral: '#1F2937',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .drop-active {
+                @apply border-accent bg-purple-50;
+            }
+            .card-shadow {
+                @apply shadow-lg hover:shadow-xl transition-shadow duration-300;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+    <header class="bg-white shadow-md">
+        <div class="container mx-auto px-4 py-6">
+            <h1 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold text-neutral">
+                <i class="fa fa-font text-primary mr-2"></i>SVG 转字体工具
+            </h1>
+            <p class="text-gray-600 mt-2">上传 SVG 图标，设置对应字符，生成自定义字体文件</p>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <!-- 上传区域 -->
+        <section class="mb-12">
+            <div id="dropArea" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center transition-all duration-300">
+                <i class="fa fa-cloud-upload text-5xl text-gray-400 mb-4"></i>
+                <h2 class="text-xl font-semibold text-neutral mb-2">拖放 SVG 文件到这里</h2>
+                <p class="text-gray-500 mb-6">或者点击选择文件</p>
+                <label class="inline-block bg-primary hover:bg-primary/90 text-white font-medium py-3 px-6 rounded-lg cursor-pointer transition-all duration-300">
+                    <i class="fa fa-folder-open mr-2"></i>选择 SVG 文件
+                    <input type="file" id="fileInput" accept=".svg" multiple class="hidden">
+                </label>
+                <p class="text-sm text-gray-400 mt-4">支持同时上传多个 SVG 文件，最多 50 个</p>
+            </div>
+            <div id="uploadProgress" class="hidden mt-4">
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progressBar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+                <p id="progressText" class="text-sm text-gray-600 mt-2">上传中...</p>
+            </div>
+        </section>
+
+        <!-- 字符映射区域 -->
+        <section id="mappingSection" class="mb-12 hidden">
+            <h2 class="text-2xl font-semibold text-neutral mb-6 flex items-center">
+                <i class="fa fa-exchange text-primary mr-2"></i>字符映射设置
+            </h2>
+            <div id="mappingsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- 映射项将在这里动态生成 -->
+            </div>
+        </section>
+
+        <!-- 操作按钮 -->
+        <section class="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+            <button id="cleanupBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-3 px-6 rounded-lg transition-all duration-300 hidden">
+                <i class="fa fa-trash mr-2"></i>清除所有文件
+            </button>
+            <button id="generateBtn" class="bg-secondary hover:bg-secondary/90 text-white font-medium py-3 px-6 rounded-lg transition-all duration-300 hidden">
+                <i class="fa fa-magic mr-2"></i>生成字体文件
+            </button>
+        </section>
+
+        <!-- 预览和结果区域 -->
+        <section id="previewSection" class="mb-12 hidden">
+            <h2 class="text-2xl font-semibold text-neutral mb-6 flex items-center">
+                <i class="fa fa-eye text-primary mr-2"></i>字体预览
+            </h2>
+            <div id="fontPreview" class="bg-white p-6 rounded-lg shadow-md">
+                <!-- 预览内容将在这里动态生成 -->
+            </div>
+        </section>
+
+        <!-- 提示信息 -->
+        <div id="message" class="fixed bottom-6 right-6 px-6 py-4 rounded-lg shadow-lg transform transition-all duration-500 translate-y-20 opacity-0 flex items-center">
+            <i id="messageIcon" class="mr-2"></i>
+            <span id="messageText"></span>
+        </div>
+    </main>
+
+    <footer class="bg-neutral text-white py-6">
+        <div class="container mx-auto px-4 text-center">
+            <p>SVG 转字体工具 &copy; 2023</p>
+            <p class="text-gray-400 text-sm mt-2">支持生成 TTF, WOFF, WOFF2, EOT 和 SVG 格式字体</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM 元素
+            const dropArea = document.getElementById('dropArea');
+            const fileInput = document.getElementById('fileInput');
+            const uploadProgress = document.getElementById('uploadProgress');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const mappingSection = document.getElementById('mappingSection');
+            const mappingsContainer = document.getElementById('mappingsContainer');
+            const cleanupBtn = document.getElementById('cleanupBtn');
+            const generateBtn = document.getElementById('generateBtn');
+            const previewSection = document.getElementById('previewSection');
+            const fontPreview = document.getElementById('fontPreview');
+            const message = document.getElementById('message');
+            const messageIcon = document.getElementById('messageIcon');
+            const messageText = document.getElementById('messageText');
+
+            // 存储上传的文件信息
+            let uploadedFiles = [];
+
+            // 显示消息提示
+            const showMessage = (text, isError = false) => {
+                messageText.textContent = text;
+                messageIcon.className = isError ? 'fa fa-exclamation-circle text-red-500' : 'fa fa-check-circle text-green-500';
+                message.className = `fixed bottom-6 right-6 px-6 py-4 rounded-lg shadow-lg transform transition-all duration-500 translate-y-0 opacity-100 flex items-center ${isError ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`;
+                
+                setTimeout(() => {
+                    message.className = 'fixed bottom-6 right-6 px-6 py-4 rounded-lg shadow-lg transform transition-all duration-500 translate-y-20 opacity-0 flex items-center';
+                }, 3000);
+            };
+
+            // 处理文件上传
+            const handleFiles = (files) => {
+                if (files.length === 0) {
+                    showMessage('请选择 SVG 文件', true);
+                    return;
+                }
+
+                // 检查文件类型
+                for (const file of files) {
+                    if (!file.name.endsWith('.svg') && file.type !== 'image/svg+xml') {
+                        showMessage(`文件 ${file.name} 不是 SVG 格式`, true);
+                        return;
+                    }
+                }
+
+                // 创建 FormData
+                const formData = new FormData();
+                for (const file of files) {
+                    formData.append('svgs', file);
+                }
+
+                // 显示上传进度
+                uploadProgress.classList.remove('hidden');
+                progressBar.style.width = '0%';
+                progressText.textContent = '准备上传...';
+
+                // 发送文件到服务器
+                fetch('/uploads', {
+                    method: 'POST',
+                    body: formData,
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('上传失败');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        uploadedFiles = [...uploadedFiles, ...data.files];
+                        updateMappings();
+                        progressBar.style.width = '100%';
+                        progressText.textContent = `成功上传 ${data.files.length} 个文件`;
+                        
+                        setTimeout(() => {
+                            uploadProgress.classList.add('hidden');
+                        }, 1000);
+                        
+                        showMessage(`成功上传 ${data.files.length} 个 SVG 文件`);
+                    } else {
+                        throw new Error(data.error || '上传失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('上传错误:', error);
+                    showMessage(error.message, true);
+                    uploadProgress.classList.add('hidden');
+                });
+            };
+
+            // 更新字符映射
+            const updateMappings = () => {
+                if (uploadedFiles.length === 0) {
+                    mappingSection.classList.add('hidden');
+                    cleanupBtn.classList.add('hidden');
+                    generateBtn.classList.add('hidden');
+                    previewSection.classList.add('hidden');
+                    return;
+                }
+
+                // 显示映射区域和按钮
+                mappingSection.classList.remove('hidden');
+                cleanupBtn.classList.remove('hidden');
+                generateBtn.classList.remove('hidden');
+                
+                // 清空容器
+                mappingsContainer.innerHTML = '';
+
+                // 为每个文件创建映射项
+                uploadedFiles.forEach((file, index) => {
+                    // 默认字符：从 'a' 开始的字母
+                    const defaultChar = String.fromCharCode(97 + index);
+                    
+                    const mappingItem = document.createElement('div');
+                    mappingItem.className = 'bg-white p-4 rounded-lg card-shadow border border-gray-100';
+                    mappingItem.innerHTML = `
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="font-medium text-neutral truncate max-w-[200px]" data-original-name="${file.originalName}"></h3>
+                                <p class="text-sm text-gray-500">${file.id}.svg</p>
+                            </div>
+                            <button class="delete-btn text-gray-400 hover:text-red-500 transition-colors" data-id="${file.id}">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <label class="text-gray-600 w-20">对应字符:</label>
+                            <input type="text" 
+                                   class="char-input flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                   data-id="${file.id}"
+                                   maxlength="1"
+                                   value="${defaultChar}">
+                        </div>
+                        <div class="mt-4 flex justify-center">
+                            <div class="bg-gray-100 p-4 rounded-md inline-flex items-center justify-center">
+                                <img src="/uploads/${file.filename}" alt="${file.originalName}" class="max-w-[80px] max-h-[80px]">
+                            </div>
+                        </div>
+                    `;
+                    
+                    mappingsContainer.appendChild(mappingItem);
+                });
+
+                // 在生成映射项后添加：
+                  document.querySelectorAll('[data-original-name]').forEach(el => {
+                    el.textContent = el.getAttribute('data-original-name');
+                    el.title = el.getAttribute('data-original-name');
+                  });
+
+                // 添加删除按钮事件
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const fileId = e.currentTarget.getAttribute('data-id');
+                        uploadedFiles = uploadedFiles.filter(file => file.id !== fileId);
+                        updateMappings();
+                        showMessage('已移除文件');
+                    });
+                });
+
+                // 添加字符输入事件
+                document.querySelectorAll('.char-input').forEach(input => {
+                    input.addEventListener('input', () => {
+                        // 确保只输入一个字符
+                        if (input.value.length > 1) {
+                            input.value = input.value[0];
+                        }
+                        updatePreview();
+                    });
+                });
+
+                // 初始更新预览
+                updatePreview();
+            };
+
+            // 更新预览
+            const updatePreview = () => {
+                if (uploadedFiles.length === 0) {
+                    previewSection.classList.add('hidden');
+                    return;
+                }
+
+                previewSection.classList.remove('hidden');
+                fontPreview.innerHTML = '';
+
+                const previewGrid = document.createElement('div');
+                previewGrid.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4';
+                
+                document.querySelectorAll('.char-input').forEach(input => {
+                    const char = input.value || '?';
+                    const fileId = input.getAttribute('data-id');
+                    const file = uploadedFiles.find(f => f.id === fileId);
+                    
+                    if (file) {
+                        const previewItem = document.createElement('div');
+                        previewItem.className = 'text-center p-3';
+                        previewItem.innerHTML = `
+                            <div class="bg-gray-100 p-2 rounded-md inline-block mb-2">
+                                <img src="/uploads/${file.filename}" alt="${file.originalName}" class="w-12 h-12">
+                            </div>
+                            <div class="text-sm text-gray-600">字符: "${char}"</div>
+                            <div class="text-xs text-gray-400">Unicode: U+${char.charCodeAt(0).toString(16).toUpperCase()}</div>
+                        `;
+                        previewGrid.appendChild(previewItem);
+                    }
+                });
+                
+                fontPreview.appendChild(previewGrid);
+            };
+
+            // 生成字体文件
+            const generateFont = () => {
+                // 收集字符映射
+                const mappings = [];
+                document.querySelectorAll('.char-input').forEach(input => {
+                    const char = input.value;
+                    const fileId = input.getAttribute('data-id');
+                    
+                    if (char) {
+                        mappings.push({ fileId, char });
+                    }
+                });
+
+                if (mappings.length === 0) {
+                    showMessage('请设置至少一个字符映射', true);
+                    return;
+                }
+
+                // 获取字体名称
+                const fontName = prompt('请输入字体名称:', 'custom-font');
+                if (!fontName) return;
+
+                // 显示加载状态
+                generateBtn.disabled = true;
+                generateBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>生成中...';
+
+                // 发送生成请求
+                fetch('/generate-font', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        fontName,
+                        mappings
+                    }),
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('生成字体失败');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    // 创建下载链接
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${fontName}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+
+                    showMessage('字体文件生成成功，已开始下载');
+                })
+                .catch(error => {
+                    console.error('生成字体错误:', error);
+                    showMessage('生成字体失败: ' + error.message, true);
+                })
+                .finally(() => {
+                    // 恢复按钮状态
+                    generateBtn.disabled = false;
+                    generateBtn.innerHTML = '<i class="fa fa-magic mr-2"></i>生成字体文件';
+                });
+            };
+
+            // 清理所有文件
+            const cleanupFiles = () => {
+                if (confirm('确定要清除所有上传的文件吗？')) {
+                    fetch('/cleanup', {
+                        method: 'POST',
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('清理失败');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        uploadedFiles = [];
+                        updateMappings();
+                        showMessage(data.message);
+                    })
+                    .catch(error => {
+                        console.error('清理错误:', error);
+                        showMessage(error.message, true);
+                    });
+                }
+            };
+
+            // 拖放事件
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight() {
+                dropArea.classList.add('drop-active');
+            }
+
+            function unhighlight() {
+                dropArea.classList.remove('drop-active');
+            }
+
+            dropArea.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles(files);
+            }
+
+            // 文件选择事件
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+                // 重置 input 以允许重复选择相同文件
+                fileInput.value = '';
+            });
+
+            // 点击上传区域触发文件选择
+            dropArea.addEventListener('click', (e) => {
+                if (!e.target.closest('label')) {
+                    fileInput.click();
+                }
+            });
+
+            // 生成按钮事件
+            generateBtn.addEventListener('click', generateFont);
+
+            // 清理按钮事件
+            cleanupBtn.addEventListener('click', cleanupFiles);
+        });
+    </script>
+</body>
+</html>
