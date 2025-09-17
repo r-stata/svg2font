@@ -13,12 +13,17 @@ const port = process.env.PORT || 8888;
 // 配置跨域
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join('/tmp', 'uploads')));
 
 // 创建临时目录
-const tempDir = path.join(__dirname, 'temp');
-const uploadsDir = path.join(__dirname, 'uploads');
+// const tempDir = path.join(__dirname, 'temp');
+// const uploadsDir = path.join(__dirname, 'uploads');
+// const fontsDir = path.join(tempDir, 'fonts');
+
+const tempDir = path.join('/tmp', 'temp');
+const uploadsDir = path.join('/tmp', 'uploads');
 const fontsDir = path.join(tempDir, 'fonts');
 
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
